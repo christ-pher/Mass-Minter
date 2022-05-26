@@ -38,6 +38,12 @@ contract Minter is Ownable {
         Allowed[_user] = !Allowed[_user];
     }
 
+    // Read Functions
+
+    function getMintersByUser(address _user) external view returns(SubMinter[] memory) {
+        return Minters[_user];
+    }
+
     // Main Functions
 
     function spawnMinters(uint256 _qty) external isAllowed {
