@@ -60,6 +60,13 @@ contract Minter is Ownable {
         delete Minters[msg.sender];
     }
 
+    function transferMinters(address _user) external isAllowed {
+        Allowed[msg.sender] = !Allowed[msg.sender];
+        Allowed[_user] = !Allowed[_user];
+        Minters[_user] = Minters[msg.sender];
+        delete Minters[msg.sender];
+    }
+
     function drainMinters() external isAllowed {
         for (uint256 x = 0; x < Minters[msg.sender].length; x++) {
             if (address(Minters[msg.sender][x]).balance > 0) {
@@ -73,9 +80,13 @@ contract Minter is Ownable {
         SubMinter[] memory minters = Minters[msg.sender];
 
         for (uint256 x; x < minters.length; x++) {
+            uint256 minterOwnedTokenCount = tokenContract.balanceOf(address(minters[x]));
+            uint256 minterOwnedIndex = 0;
             for (uint256 y = _start; y <= _end; y++) {
                 if (tokenContract.ownerOf(y) == address(minters[x])) {
                     minters[x].transferToken(_tokenAddress, y, _receiver);
+                    minterOwnedIndex++;
+                    if (minterOwnedTokenCount == minterOwnedIndex) break;
                 }
             }
         }
