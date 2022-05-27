@@ -48,7 +48,7 @@ contract Minter is Ownable {
 
     function spawnMinters(uint256 _qty) external isAllowed {
         for (uint256 i; i < _qty; i++) {
-            SubMinter minter = new SubMinter();
+            SubMinter minter = new SubMinter(msg.sender);
             Minters[msg.sender].push(minter);
         }
     }
@@ -60,10 +60,27 @@ contract Minter is Ownable {
         delete Minters[msg.sender];
     }
 
-    function transfer(uint256 _minter, address _tokenAddress, uint256 _start, uint256 _end, address _receiver) external isAllowed {
-        Minters[msg.sender][_minter].transfer(_tokenAddress, _start, _end, _receiver);
+    function drainMinters() external isAllowed {
+        for (uint256 x = 0; x < Minters[msg.sender].length; x++) {
+            if (address(Minters[msg.sender][x]).balance > 0) {
+                Minters[msg.sender][x].drainEther();
+            }
+        }
     }
 
+    function transferTokens(address _tokenAddress, uint256 _start, uint256 _end, address _receiver) external isAllowed {
+        IERC721 tokenContract = IERC721(_tokenAddress);
+        SubMinter[] memory minters = Minters[msg.sender];
+
+        for (uint256 x; x < minters.length; x++) {
+            for (uint256 y = _start; y <= _end; y++) {
+                if (tokenContract.ownerOf(y) == address(minters[x])) {
+                    minters[x].transferToken(_tokenAddress, y, _receiver);
+                }
+            }
+        }
+    }
+    
     function mint(address _target, uint256 _cost, bytes memory _data, bool _transfer, uint256 _iterations, uint256 _minters) external payable isAllowed {
         require(_minters <= Minters[msg.sender].length);
         for (uint256 i; i < _minters; i++) {
@@ -76,6 +93,7 @@ contract Minter is Ownable {
 
 contract SubMinter is Ownable, IERC721Receiver {
 
+    address public admin;
     address public receiver;
     address public target;
     uint256 public cost;
@@ -83,16 +101,23 @@ contract SubMinter is Ownable, IERC721Receiver {
     bool    public transferTokens;
     bytes   public data;
 
+    constructor(address _admin) {
+        admin = _admin;
+    }
+
     function destroy() external onlyOwner {
-        address payable addr = payable(msg.sender);
+        address payable addr = payable(admin);
         selfdestruct(addr);
     }
 
-    function transfer(address _tokenAddress, uint256 _start, uint256 _end, address _receiver) external onlyOwner {
-        for (uint256 i = _start; i <= _end; i++) {
-            IERC721 sender = IERC721(_tokenAddress);
-            sender.transferFrom(address(this), _receiver, i);
-        }
+    function drainEther() external onlyOwner {
+        address payable addr = payable(admin);
+        addr.transfer(address(this).balance);
+    }
+
+    function transferToken(address _tokenAddress, uint256 _tokenId, address _receiver) external onlyOwner {
+        IERC721 tokenContract = IERC721(_tokenAddress);
+        tokenContract.transferFrom(address(this), _receiver, _tokenId);
     }
 
     function settings(address _receiver, address _target, uint256 _cost, bytes memory _data, bool _transfer, uint256 _iterations) external onlyOwner {
